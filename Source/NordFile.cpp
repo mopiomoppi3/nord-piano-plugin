@@ -272,14 +272,16 @@ NpnoFile decodeNpno (const juce::File& file)
             blockWords = bw;
     }
 
-    // Decode strokes (normal layers only; release/alt strokes come later)
-    struct Decoded { const RawStroke* stroke; std::vector<std::vector<juce::int32>> pcm; int frames = 0; };
+    // Decode strokes: normal layers and key-release strokes (the type-1
+    // alternative list is still skipped). Each stroke is peak-normalised on
+    // its own - a zone's layers peak alike at the same attenuation, so the
+    // touch law in the voice sets the level (OpenNord §2.2).
+    struct Decoded { const RawStroke* stroke; std::vector<std::vector<juce::int32>> pcm; int frames = 0; double peak = 0.0; };
     std::vector<Decoded> decoded;
-    double globalPeak = 0.0;
 
     for (const auto& s : raw)
     {
-        if (s.flags != 0)
+        if (s.flags != 0 && s.flags != 2)
             continue;
         if (s.offset + s.blocks * blockWords * 2 > (int) size)
             continue;
@@ -347,8 +349,8 @@ NpnoFile decodeNpno (const juce::File& file)
                     hist[c][0] = x;
                     dec.pcm[(size_t) c][(size_t) t] = x;
                     const double a = std::abs ((double) x);
-                    if (a > globalPeak)
-                        globalPeak = a;
+                    if (a > dec.peak)
+                        dec.peak = a;
                 }
                 ++t;
             }
@@ -358,7 +360,7 @@ NpnoFile decodeNpno (const juce::File& file)
             decoded.push_back (std::move (dec));
     }
 
-    if (decoded.empty() || globalPeak <= 0.0)
+    if (decoded.empty())
     {
         result.error = "No strokes could be decoded";
         return result;
@@ -369,7 +371,6 @@ NpnoFile decodeNpno (const juce::File& file)
     for (const auto& s : raw)
         numZones = juce::jmax (numZones, s.zone + 1);
 
-    const float gain = (float) (1.0 / globalPeak);
     for (int z = 0; z < numZones; ++z)
     {
         NpnoZone zone;
@@ -383,17 +384,22 @@ NpnoFile decodeNpno (const juce::File& file)
                 zone.highNote = sp.high;
             }
 
-        std::vector<const Decoded*> layers;
+        // Normal layers and release strokes of this zone, each loudest first.
+        std::vector<const Decoded*> layers, releases;
         for (const auto& dec : decoded)
-            if (dec.stroke->zone == z)
-                layers.push_back (&dec);
-        std::sort (layers.begin(), layers.end(),
-                   [] (const Decoded* a, const Decoded* b) { return a->stroke->velocityFloor < b->stroke->velocityFloor; });
-
-        for (const auto* dec : layers)
         {
+            if (dec.stroke->zone != z || dec.peak <= 0.0)
+                continue;
+            (dec.stroke->flags == 2 ? releases : layers).push_back (&dec);
+        }
+        auto byFloor = [] (const Decoded* a, const Decoded* b) { return a->stroke->velocityFloor < b->stroke->velocityFloor; };
+        std::sort (layers.begin(), layers.end(), byFloor);
+        std::sort (releases.begin(), releases.end(), byFloor);
+
+        auto buildLayer = [&] (const Decoded* dec) {
             NpnoLayer layer;
             layer.velocityFloor = dec->stroke->velocityFloor;
+            const float gain = (float) (1.0 / dec->peak); // per-stroke peak normalisation
             layer.audio.setSize (channels, dec->frames);
             for (int c = 0; c < channels; ++c)
             {
@@ -407,8 +413,12 @@ NpnoFile decodeNpno (const juce::File& file)
                 layer.loopLength = dec->stroke->loopLength;
                 layer.loopDecay = dec->stroke->loopDecay;
             }
-            zone.layers.push_back (std::move (layer));
-        }
+            return layer;
+        };
+        for (const auto* dec : layers)
+            zone.layers.push_back (buildLayer (dec));
+        for (const auto* dec : releases)
+            zone.releaseLayers.push_back (buildLayer (dec));
         if (! zone.layers.empty())
             result.zones.push_back (std::move (zone));
     }

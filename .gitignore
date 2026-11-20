@@ -1,0 +1,5 @@
+build/
+dist/
+staging/
+.DS_Store
+*.user

@@ -1,0 +1,38 @@
+name: Build macOS plugin
+
+on:
+  workflow_dispatch:
+  push:
+
+jobs:
+  build:
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure
+        run: cmake -B build -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        run: cmake --build build --config Release
+
+      - name: Ad-hoc sign bundles
+        run: |
+          find build -name "*.component" -o -name "*.vst3" -o -name "Nord Piano.app" | while read -r bundle; do
+            codesign --force --deep --sign - "$bundle" || true
+          done
+
+      - name: Package with ditto (keeps bundle integrity)
+        run: |
+          mkdir -p dist staging
+          find build -type d \( -name "*.component" -o -name "*.vst3" -o -name "Nord Piano.app" \) -print0 | while IFS= read -r -d '' bundle; do
+            cp -R "$bundle" staging/ 2>/dev/null || ditto "$bundle" "staging/$(basename "$bundle")"
+          done
+          ls -la staging
+          ditto -c -k --sequesterRsrc --keepParent staging dist/NordPiano-macOS.zip
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: NordPiano-macOS
+          path: dist/NordPiano-macOS.zip

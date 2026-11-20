@@ -3,44 +3,263 @@
 
 namespace
 {
-const juce::Colour nordRed   (0xffa6192e);
-const juce::Colour panelGrey (0xff37474f);
-const juce::Colour panelDark (0xff2b363c);
-const juce::Colour panelText (0xffe8ecef);
+const juce::Colour nordRed    (0xffa6192e);
+const juce::Colour panelRed   (0xff8f1220); // darker inset section on the red body
+const juce::Colour panelEdge  (0xff6d0d1b);
+const juce::Colour creamText  (0xfff3e9d2);
+const juce::Colour panelText  (0xffe8ecef);
+const juce::Colour lcdBack    (0xff0d1417);
+const juce::Colour lcdText    (0xffcfe8dc);
 
-juce::Rectangle<int> topPanelBounds()   { return { 190, 12, 900, 146 }; }
-juce::Rectangle<int> organPanelBounds() { return { 16, 170, 616, 214 }; }
-juce::Rectangle<int> synthPanelBounds() { return { 648, 170, 616, 214 }; }
+juce::Rectangle<int> topPanelBounds()   { return { 120, 12, 890, 146 }; }
+juce::Rectangle<int> organPanelBounds() { return { 36, 170, 596, 214 }; }
+juce::Rectangle<int> synthPanelBounds() { return { 648, 170, 596, 214 }; }
+juce::Rectangle<int> keyboardBounds()   { return { 30, 398, 1220, 152 }; }
 
 void styleRotary (juce::Slider& s)
 {
     s.setSliderStyle (juce::Slider::RotaryHorizontalVerticalDrag);
     s.setTextBoxStyle (juce::Slider::NoTextBox, false, 0, 0);
-    s.setColour (juce::Slider::rotarySliderFillColourId, juce::Colours::white);
-    s.setColour (juce::Slider::rotarySliderOutlineColourId, juce::Colours::black);
 }
 void styleLabel (juce::Label& l)
 {
-    l.setColour (juce::Label::textColourId, panelText);
-    l.setFont (juce::Font (juce::FontOptions (11.0f)));
+    l.setColour (juce::Label::textColourId, creamText);
+    l.setFont (juce::Font (juce::FontOptions (11.0f, juce::Font::bold)));
     l.setJustificationType (juce::Justification::centred);
 }
+void drawWoodCheek (juce::Graphics& g, juce::Rectangle<int> area)
+{
+    g.setColour (juce::Colour (0xff7c4a26));
+    g.fillRect (area);
+    for (int i = 0; i < area.getWidth(); ++i)
+    {
+        const float n = std::sin ((float) i * 12.9898f) * 43758.5453f;
+        const float f = n - std::floor (n);
+        g.setColour (juce::Colour (0xff633818).interpolatedWith (juce::Colour (0xffa06c36), f).withAlpha (0.35f));
+        g.fillRect (area.getX() + i, area.getY(), 1, area.getHeight());
+    }
+    juce::ColourGradient gloss (juce::Colours::white.withAlpha (0.14f), 0.0f, (float) area.getY(),
+                                juce::Colours::transparentWhite, 0.0f, (float) area.getBottom(), false);
+    g.setGradientFill (gloss);
+    g.fillRect (area);
 }
+void drawPanel (juce::Graphics& g, juce::Rectangle<int> r)
+{
+    g.setColour (panelRed);
+    g.fillRoundedRectangle (r.toFloat(), 8.0f);
+    g.setColour (juce::Colours::white.withAlpha (0.10f));
+    g.drawRoundedRectangle (r.toFloat().reduced (0.5f), 8.0f, 1.0f);
+    g.setColour (panelEdge);
+    g.drawRoundedRectangle (r.toFloat().expanded (1.0f), 9.0f, 1.0f);
+    // corner screws
+    for (auto c : { juce::Point<float> ((float) r.getX() + 10, (float) r.getY() + 10),
+                    juce::Point<float> ((float) r.getRight() - 10, (float) r.getY() + 10),
+                    juce::Point<float> ((float) r.getX() + 10, (float) r.getBottom() - 10),
+                    juce::Point<float> ((float) r.getRight() - 10, (float) r.getBottom() - 10) })
+    {
+        g.setColour (juce::Colour (0xffc9c9c9));
+        g.fillEllipse (c.x - 3.0f, c.y - 3.0f, 6.0f, 6.0f);
+        g.setColour (juce::Colour (0xff555c60));
+        g.drawLine (c.x - 2.2f, c.y, c.x + 2.2f, c.y, 1.2f);
+    }
+}
+}
+
+//==============================================================================
+// NordLookAndFeel
+
+void NordLookAndFeel::drawRotarySlider (juce::Graphics& g, int x, int y, int width, int height,
+                                        float sliderPosProportional, float rotaryStartAngle,
+                                        float rotaryEndAngle, juce::Slider& slider)
+{
+    juce::Graphics::ScopedSaveState save (g);
+    if (! slider.isEnabled())
+        g.setOpacity (0.35f);
+
+    const auto bounds = juce::Rectangle<int> (x, y, width, height).toFloat().reduced (2.0f);
+    const float radius = juce::jmin (bounds.getWidth(), bounds.getHeight()) * 0.5f;
+    const float cx = bounds.getCentreX();
+    const float cy = bounds.getCentreY();
+    const float angle = rotaryStartAngle + sliderPosProportional * (rotaryEndAngle - rotaryStartAngle);
+
+    juce::Path track;
+    track.addCentredArc (cx, cy, radius - 2.0f, radius - 2.0f, 0.0f, rotaryStartAngle, rotaryEndAngle, true);
+    g.setColour (juce::Colours::white.withAlpha (0.20f));
+    g.strokePath (track, juce::PathStrokeType (2.0f));
+
+    juce::Path filled;
+    filled.addCentredArc (cx, cy, radius - 2.0f, radius - 2.0f, 0.0f, rotaryStartAngle, angle, true);
+    g.setColour (juce::Colours::white.withAlpha (0.9f));
+    g.strokePath (filled, juce::PathStrokeType (2.0f));
+
+    const float bodyR = radius - 7.0f;
+    const auto body = juce::Rectangle<float> (cx - bodyR, cy - bodyR, bodyR * 2.0f, bodyR * 2.0f);
+    juce::ColourGradient grad (juce::Colour (0xff454a50), body.getX(), body.getY(),
+                               juce::Colour (0xff131416), body.getX(), body.getBottom(), false);
+    g.setGradientFill (grad);
+    g.fillEllipse (body);
+    g.setColour (juce::Colours::white.withAlpha (0.28f));
+    g.drawEllipse (body.reduced (0.5f), 1.0f);
+    g.setColour (juce::Colours::black.withAlpha (0.4f));
+    g.drawEllipse (body.expanded (1.5f), 1.0f);
+
+    const float px = cx + std::sin (angle) * (bodyR - 4.0f);
+    const float py = cy - std::cos (angle) * (bodyR - 4.0f);
+    g.setColour (juce::Colours::white);
+    g.drawLine (cx, cy, px, py, 2.5f);
+}
+
+void NordLookAndFeel::drawLinearSlider (juce::Graphics& g, int x, int y, int width, int height,
+                                        float sliderPos, float minSliderPos, float maxSliderPos,
+                                        juce::Slider::SliderStyle, juce::Slider& slider)
+{
+    juce::Graphics::ScopedSaveState save (g);
+    if (! slider.isEnabled())
+        g.setOpacity (0.35f);
+
+    const float cx = (float) x + (float) width * 0.5f;
+    const float top = maxSliderPos;
+    const float bottom = minSliderPos;
+
+    // slot
+    g.setColour (juce::Colours::black.withAlpha (0.55f));
+    g.fillRoundedRectangle (cx - 3.0f, top - 6.0f, 6.0f, (bottom - top) + 12.0f, 3.0f);
+    g.setColour (juce::Colours::white.withAlpha (0.15f));
+    g.drawLine (cx, top - 6.0f, cx, bottom + 6.0f, 1.0f);
+
+    // scale ticks, 0..8
+    g.setColour (juce::Colours::white.withAlpha (0.35f));
+    for (int i = 0; i <= 8; ++i)
+    {
+        const float ty = top + (bottom - top) * (float) i / 8.0f;
+        g.drawLine (cx - 14.0f, ty, cx - 9.0f, ty, 1.0f);
+    }
+
+    // handle: brown for the sub footages, cream for the rest (thumbColourId)
+    const auto handleColour = slider.findColour (juce::Slider::thumbColourId);
+    const auto handle = juce::Rectangle<float> (cx - (float) width * 0.5f + 5.0f, sliderPos - 10.0f,
+                                                (float) width - 10.0f, 20.0f);
+    juce::ColourGradient grad (handleColour.brighter (0.25f), handle.getX(), handle.getY(),
+                               handleColour.darker (0.25f), handle.getX(), handle.getBottom(), false);
+    g.setGradientFill (grad);
+    g.fillRoundedRectangle (handle, 3.0f);
+    g.setColour (juce::Colours::black.withAlpha (0.45f));
+    g.drawRoundedRectangle (handle, 3.0f, 1.0f);
+    g.setColour (juce::Colours::white.withAlpha (0.85f));
+    g.drawLine (handle.getX() + 4.0f, sliderPos, handle.getRight() - 4.0f, sliderPos, 1.6f);
+}
+
+void NordLookAndFeel::drawToggleButton (juce::Graphics& g, juce::ToggleButton& button,
+                                        bool shouldDrawButtonAsHighlighted, bool)
+{
+    juce::Graphics::ScopedSaveState save (g);
+    if (! button.isEnabled())
+        g.setOpacity (0.35f);
+
+    const auto bounds = button.getLocalBounds().toFloat();
+    const float ledCx = bounds.getX() + 8.0f;
+    const float ledCy = bounds.getCentreY();
+
+    if (shouldDrawButtonAsHighlighted)
+    {
+        g.setColour (juce::Colours::white.withAlpha (0.08f));
+        g.fillRoundedRectangle (bounds, 4.0f);
+    }
+
+    const bool on = button.getToggleState();
+    if (on)
+    {
+        g.setColour (juce::Colour (0xffff6a33).withAlpha (0.35f));
+        g.fillEllipse (ledCx - 7.0f, ledCy - 7.0f, 14.0f, 14.0f);
+        g.setColour (juce::Colour (0xffff7a40));
+    }
+    else
+    {
+        g.setColour (juce::Colour (0xff3d2320));
+    }
+    g.fillEllipse (ledCx - 4.0f, ledCy - 4.0f, 8.0f, 8.0f);
+    g.setColour (juce::Colours::black.withAlpha (0.5f));
+    g.drawEllipse (ledCx - 4.0f, ledCy - 4.0f, 8.0f, 8.0f, 1.0f);
+
+    g.setColour (button.findColour (juce::ToggleButton::textColourId));
+    g.setFont (juce::Font (juce::FontOptions (12.0f)));
+    g.drawText (button.getButtonText(),
+                juce::Rectangle<float> (bounds.getX() + 20.0f, bounds.getY(),
+                                        bounds.getWidth() - 20.0f, bounds.getHeight()),
+                juce::Justification::centredLeft, false);
+}
+
+void NordLookAndFeel::drawComboBox (juce::Graphics& g, int width, int height, bool,
+                                    int buttonX, int buttonY, int buttonW, int buttonH, juce::ComboBox& box)
+{
+    juce::Graphics::ScopedSaveState save (g);
+    if (! box.isEnabled())
+        g.setOpacity (0.35f);
+
+    const auto bounds = juce::Rectangle<float> (0.0f, 0.0f, (float) width, (float) height);
+    juce::ColourGradient grad (juce::Colour (0xff2c3338), 0.0f, 0.0f,
+                               juce::Colour (0xff171b1e), 0.0f, (float) height, false);
+    g.setGradientFill (grad);
+    g.fillRoundedRectangle (bounds, 4.0f);
+    g.setColour (juce::Colours::white.withAlpha (0.22f));
+    g.drawRoundedRectangle (bounds.reduced (0.5f), 4.0f, 1.0f);
+
+    const float ax = (float) (buttonX + buttonW / 2);
+    const float ay = (float) (buttonY + buttonH / 2);
+    juce::Path arrow;
+    arrow.addTriangle (ax - 5.0f, ay - 3.0f, ax + 5.0f, ay - 3.0f, ax, ay + 4.0f);
+    g.setColour (box.findColour (juce::ComboBox::arrowColourId));
+    g.fillPath (arrow);
+}
+
+juce::Font NordLookAndFeel::getComboBoxFont (juce::ComboBox&)
+{
+    return juce::Font (juce::FontOptions (13.0f));
+}
+
+void NordLookAndFeel::drawButtonBackground (juce::Graphics& g, juce::Button& button,
+                                            const juce::Colour&, bool shouldDrawButtonAsHighlighted,
+                                            bool shouldDrawButtonAsDown)
+{
+    const auto bounds = button.getLocalBounds().toFloat().reduced (0.5f);
+    juce::Colour top (0xff39434a), bottom (0xff1d2226);
+    if (shouldDrawButtonAsDown)
+    {
+        top = juce::Colour (0xff20262b);
+        bottom = juce::Colour (0xff121518);
+    }
+    else if (shouldDrawButtonAsHighlighted)
+    {
+        top = juce::Colour (0xff46525b);
+        bottom = juce::Colour (0xff232a2f);
+    }
+    juce::ColourGradient grad (top, bounds.getX(), bounds.getY(), bottom, bounds.getX(), bounds.getBottom(), false);
+    g.setGradientFill (grad);
+    g.fillRoundedRectangle (bounds, 5.0f);
+    g.setColour (juce::Colours::white.withAlpha (0.25f));
+    g.drawRoundedRectangle (bounds, 5.0f, 1.0f);
+}
+
+//==============================================================================
 
 NordPianoAudioProcessorEditor::NordPianoAudioProcessorEditor (NordPianoAudioProcessor& p)
     : AudioProcessorEditor (&p),
       processor (p),
       keyboard (p.keyboardState, juce::MidiKeyboardComponent::horizontalKeyboard)
 {
+    setLookAndFeel (&lookAndFeel);
     setSize (1280, 560);
 
     loadButton.onClick = [this] { openFileChooser(); };
+    loadButton.setColour (juce::TextButton::textColourOffId, panelText);
     addAndMakeVisible (loadButton);
 
     fileLabel.setText ("Load: WAV/AIFF, .npno piano, .ns4o organ preset, .ns4y synth preset (.nsmp is next)",
                        juce::dontSendNotification);
-    fileLabel.setColour (juce::Label::textColourId, panelText);
+    fileLabel.setColour (juce::Label::textColourId, lcdText);
+    fileLabel.setColour (juce::Label::backgroundColourId, lcdBack);
     fileLabel.setFont (juce::Font (juce::FontOptions (13.0f)));
+    fileLabel.setBorderSize (juce::BorderSize<int> (6));
     addAndMakeVisible (fileLabel);
 
     for (auto* s : { &volumeSlider, &reverbSlider, &tuneSlider, &stretchSlider })
@@ -62,16 +281,18 @@ NordPianoAudioProcessorEditor::NordPianoAudioProcessorEditor (NordPianoAudioProc
     stretchAttachment = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment> (
         processor.parameters, "stretch", stretchSlider);
 
-    hzLabel.setColour (juce::Label::textColourId, panelText);
+    hzLabel.setColour (juce::Label::textColourId, creamText);
     hzLabel.setFont (juce::Font (juce::FontOptions (13.0f, juce::Font::bold)));
     hzLabel.setJustificationType (juce::Justification::centred);
     addAndMakeVisible (hzLabel);
     hz440Button.onClick = [this] { setTuneHz (440.0); };
     hz442Button.onClick = [this] { setTuneHz (442.0); };
     hz444Button.onClick = [this] { setTuneHz (444.0); };
-    addAndMakeVisible (hz440Button);
-    addAndMakeVisible (hz442Button);
-    addAndMakeVisible (hz444Button);
+    for (auto* b : { &hz440Button, &hz442Button, &hz444Button })
+    {
+        b->setColour (juce::TextButton::textColourOffId, panelText);
+        addAndMakeVisible (b);
+    }
 
     //---- Organ section ------------------------------------------------------
     static const char* footage[9] = { "16", "5 1/3", "8", "4", "2 2/3", "2", "1 3/5", "1 1/3", "1" };
@@ -81,11 +302,10 @@ NordPianoAudioProcessorEditor::NordPianoAudioProcessorEditor (NordPianoAudioProc
         s.setSliderStyle (juce::Slider::LinearVertical);
         s.setRange (0.0, 8.0, 1.0);
         s.setTextBoxStyle (juce::Slider::TextBoxBelow, false, 36, 16);
-        s.setColour (juce::Slider::trackColourId, juce::Colours::white);
-        s.setColour (juce::Slider::textBoxTextColourId, panelText);
-        s.setColour (juce::Slider::textBoxBackgroundColourId, panelDark);
-        s.setColour (juce::Slider::textBoxOutlineColourId, panelGrey);
-        s.setColour (juce::Slider::thumbColourId, i < 2 ? juce::Colour (0xff6d4c41) : juce::Colours::white);
+        s.setColour (juce::Slider::textBoxTextColourId, creamText);
+        s.setColour (juce::Slider::textBoxBackgroundColourId, panelRed);
+        s.setColour (juce::Slider::textBoxOutlineColourId, panelRed);
+        s.setColour (juce::Slider::thumbColourId, i < 2 ? juce::Colour (0xff7a4a2b) : juce::Colour (0xfff1e6cf));
         s.onValueChange = [this, i] { processor.organState.drawbars[i] = (int) drawbarSliders[i].getValue(); };
         addAndMakeVisible (s);
         drawbarLabels[i].setText (footage[i], juce::dontSendNotification);
@@ -93,6 +313,8 @@ NordPianoAudioProcessorEditor::NordPianoAudioProcessorEditor (NordPianoAudioProc
         addAndMakeVisible (drawbarLabels[i]);
     }
     organModelBox.addItemList ({ "B3", "VOX", "FARF", "PIPE1", "PIPE2", "B3 BASS" }, 1);
+    organModelBox.setColour (juce::ComboBox::textColourId, panelText);
+    organModelBox.setColour (juce::ComboBox::arrowColourId, panelText);
     organModelBox.onChange = [this]
     {
         if (organModelBox.getSelectedId() > 0)
@@ -109,7 +331,7 @@ NordPianoAudioProcessorEditor::NordPianoAudioProcessorEditor (NordPianoAudioProc
     vibToggle.onClick = [this] { processor.organState.vibChorusOn = vibToggle.getToggleState(); };
     for (auto* t : { &percToggle, &perc3rdToggle, &percFastToggle, &percSoftToggle, &vibToggle })
     {
-        t->setColour (juce::ToggleButton::textColourId, panelText);
+        t->setColour (juce::ToggleButton::textColourId, creamText);
         addAndMakeVisible (t);
     }
 
@@ -141,6 +363,8 @@ NordPianoAudioProcessorEditor::NordPianoAudioProcessorEditor (NordPianoAudioProc
         addAndMakeVisible (synthKnobLabels[i]);
     }
     filterTypeBox.addItemList ({ "LP12", "LP24", "LPM", "LPHP", "BP", "HP" }, 1);
+    filterTypeBox.setColour (juce::ComboBox::textColourId, panelText);
+    filterTypeBox.setColour (juce::ComboBox::arrowColourId, panelText);
     filterTypeBox.onChange = [this]
     {
         if (filterTypeBox.getSelectedId() > 0)
@@ -149,11 +373,17 @@ NordPianoAudioProcessorEditor::NordPianoAudioProcessorEditor (NordPianoAudioProc
     addAndMakeVisible (filterTypeBox);
     styleLabel (filterTypeLabel);
     addAndMakeVisible (filterTypeLabel);
-    synthSourceLabel.setColour (juce::Label::textColourId, panelText);
+    synthSourceLabel.setColour (juce::Label::textColourId, creamText);
     synthSourceLabel.setFont (juce::Font (juce::FontOptions (12.0f)));
     addAndMakeVisible (synthSourceLabel);
 
     keyboard.setAvailableRange (21, 108); // A0 - C8, like an 88-key piano
+    keyboard.setColour (juce::MidiKeyboardComponent::whiteNoteColourId, juce::Colour (0xfff7f1e3));
+    keyboard.setColour (juce::MidiKeyboardComponent::blackNoteColourId, juce::Colour (0xff14161a));
+    keyboard.setColour (juce::MidiKeyboardComponent::keySeparatorLineColourId, juce::Colour (0xffb9ac9c));
+    keyboard.setColour (juce::MidiKeyboardComponent::mouseOverKeyOverlayColourId, juce::Colour (0x22a6192e));
+    keyboard.setColour (juce::MidiKeyboardComponent::keyDownOverlayColourId, juce::Colour (0x66a6192e));
+    keyboard.setColour (juce::MidiKeyboardComponent::textLabelColourId, juce::Colour (0xff555049));
     addAndMakeVisible (keyboard);
 
     setOrganControlsEnabled (false);
@@ -162,7 +392,10 @@ NordPianoAudioProcessorEditor::NordPianoAudioProcessorEditor (NordPianoAudioProc
     startTimer (250);
 }
 
-NordPianoAudioProcessorEditor::~NordPianoAudioProcessorEditor() = default;
+NordPianoAudioProcessorEditor::~NordPianoAudioProcessorEditor()
+{
+    setLookAndFeel (nullptr);
+}
 
 void NordPianoAudioProcessorEditor::setOrganControlsEnabled (bool enabled)
 {
@@ -267,40 +500,60 @@ void NordPianoAudioProcessorEditor::openFileChooser()
 void NordPianoAudioProcessorEditor::paint (juce::Graphics& g)
 {
     auto bounds = getLocalBounds();
-    g.setColour (nordRed);
+
+    juce::ColourGradient bodyGrad (nordRed.brighter (0.06f), 0.0f, 0.0f,
+                                   nordRed.darker (0.12f), 0.0f, (float) bounds.getHeight(), false);
+    g.setGradientFill (bodyGrad);
     g.fillRect (bounds);
 
-    g.setColour (panelGrey);
-    g.fillRoundedRectangle (topPanelBounds().toFloat(), 6.0f);
-    g.setColour (panelDark);
-    g.fillRoundedRectangle (organPanelBounds().toFloat(), 6.0f);
-    g.fillRoundedRectangle (synthPanelBounds().toFloat(), 6.0f);
+    drawWoodCheek (g, { 0, 0, 24, bounds.getHeight() });
+    drawWoodCheek (g, { bounds.getWidth() - 24, 0, 24, bounds.getHeight() });
+    g.setColour (juce::Colours::black.withAlpha (0.4f));
+    g.drawVerticalLine (24, 0.0f, (float) bounds.getHeight());
+    g.drawVerticalLine (bounds.getWidth() - 25, 0.0f, (float) bounds.getHeight());
 
-    g.setColour (panelText);
+    drawPanel (g, topPanelBounds());
+    drawPanel (g, organPanelBounds());
+    drawPanel (g, synthPanelBounds());
+
+    g.setColour (creamText);
     g.setFont (juce::Font (juce::FontOptions (14.0f, juce::Font::bold)));
-    g.drawText ("ORGAN", organPanelBounds().withHeight (24), juce::Justification::centred, false);
-    g.drawText ("SYNTH", synthPanelBounds().withHeight (24), juce::Justification::centred, false);
+    g.drawText ("ORGAN", organPanelBounds().withHeight (28), juce::Justification::centred, false);
+    g.drawText ("SYNTH", synthPanelBounds().withHeight (28), juce::Justification::centred, false);
+    g.drawText ("PIANO", topPanelBounds().removeFromRight (170).withHeight (28),
+                juce::Justification::centredRight, false);
     g.setFont (juce::Font (juce::FontOptions (10.0f)));
-    g.drawText ("preset controls - load an .ns4o / .ns4y file to enable",
-                organPanelBounds().withTrimmedTop (organPanelBounds().getHeight() - 18).withHeight (16),
-                juce::Justification::centred, false);
-    g.drawText ("preset controls - load an .ns4o / .ns4y file to enable",
-                synthPanelBounds().withTrimmedTop (synthPanelBounds().getHeight() - 18).withHeight (16),
-                juce::Justification::centred, false);
+    g.setColour (creamText.withAlpha (0.75f));
+    g.drawText ("preset controls - load an .ns4o file to enable",
+                organPanelBounds().withTrimmedTop (organPanelBounds().getHeight() - 18)
+                    .withHeight (16).withTrimmedLeft (22).withWidth (440),
+                juce::Justification::centredLeft, false);
+    g.drawText ("preset controls - load an .ns4y file to enable",
+                synthPanelBounds().withTrimmedTop (synthPanelBounds().getHeight() - 18)
+                    .withHeight (16).withTrimmedLeft (24).withWidth (440),
+                juce::Justification::centredLeft, false);
+
+    // felt strip above the keys
+    const auto kb = keyboardBounds();
+    g.setColour (juce::Colour (0xff6d0a18));
+    g.fillRect (kb.getX(), kb.getY() - 6, kb.getWidth(), 6);
+    g.setColour (juce::Colours::black.withAlpha (0.35f));
+    g.drawHorizontalLine (kb.getY() - 1, (float) kb.getX(), (float) kb.getRight());
 
     // Plugin name at the right, like the hardware model name
     g.setColour (juce::Colours::white);
     g.setFont (juce::Font (juce::FontOptions (27.0f)));
-    g.drawText ("nord piano", 1104, 44, 164, 36, juce::Justification::right, false);
+    g.drawText ("nord piano", 1024, 44, 220, 36, juce::Justification::right, false);
     g.setFont (juce::Font (juce::FontOptions (10.0f)));
-    g.drawText ("AU PLUGIN EDITION", 1104, 82, 164, 16, juce::Justification::right, false);
-    g.drawText ("v0.4", 20, 20, 100, 16, juce::Justification::left, false);
+    g.drawText ("AU PLUGIN EDITION", 1024, 82, 220, 16, juce::Justification::right, false);
+    g.drawText ("v0.5", 36, 18, 100, 16, juce::Justification::left, false);
 }
 
 void NordPianoAudioProcessorEditor::resized()
 {
-    auto bounds = getLocalBounds();
-    keyboard.setBounds (bounds.removeFromBottom (150).reduced (10, 5));
+    const auto kb = keyboardBounds();
+    keyboard.setBounds (kb);
+    keyboard.setKeyWidth ((float) kb.getWidth() / 52.0f); // 52 white keys on an 88
 
     const auto top = topPanelBounds();
     loadButton.setBounds (top.getX() + 16, top.getY() + 10, 130, 28);
@@ -309,41 +562,41 @@ void NordPianoAudioProcessorEditor::resized()
     const int knobY = top.getY() + 48;
     volumeSlider.setBounds (top.getX() + 16, knobY, 68, 68);
     volumeLabel.setBounds (top.getX() + 16, knobY + 70, 68, 14);
-    reverbSlider.setBounds (top.getX() + 116, knobY, 68, 68);
-    reverbLabel.setBounds (top.getX() + 116, knobY + 70, 68, 14);
-    tuneSlider.setBounds (top.getX() + 216, knobY, 68, 68);
-    tuneLabel.setBounds (top.getX() + 216, knobY + 70, 68, 14);
-    stretchSlider.setBounds (top.getX() + 316, knobY, 68, 68);
-    stretchLabel.setBounds (top.getX() + 316, knobY + 70, 68, 14);
+    reverbSlider.setBounds (top.getX() + 126, knobY, 68, 68);
+    reverbLabel.setBounds (top.getX() + 126, knobY + 70, 68, 14);
+    tuneSlider.setBounds (top.getX() + 236, knobY, 68, 68);
+    tuneLabel.setBounds (top.getX() + 236, knobY + 70, 68, 14);
+    stretchSlider.setBounds (top.getX() + 346, knobY, 68, 68);
+    stretchLabel.setBounds (top.getX() + 346, knobY + 70, 68, 14);
 
-    hzLabel.setBounds (top.getX() + 430, knobY + 2, 130, 20);
-    hz440Button.setBounds (top.getX() + 424, knobY + 28, 40, 26);
-    hz442Button.setBounds (top.getX() + 468, knobY + 28, 40, 26);
-    hz444Button.setBounds (top.getX() + 512, knobY + 28, 40, 26);
+    hzLabel.setBounds (top.getX() + 470, knobY + 2, 130, 20);
+    hz440Button.setBounds (top.getX() + 464, knobY + 28, 40, 26);
+    hz442Button.setBounds (top.getX() + 508, knobY + 28, 40, 26);
+    hz444Button.setBounds (top.getX() + 552, knobY + 28, 40, 26);
 
     const auto organ = organPanelBounds();
     for (int i = 0; i < 9; ++i)
     {
-        const int x = organ.getX() + 24 + i * 50;
-        drawbarLabels[i].setBounds (x, organ.getY() + 28, 44, 14);
-        drawbarSliders[i].setBounds (x, organ.getY() + 44, 44, 140);
+        const int x = organ.getX() + 22 + i * 48;
+        drawbarLabels[i].setBounds (x, organ.getY() + 30, 44, 14);
+        drawbarSliders[i].setBounds (x, organ.getY() + 46, 44, 138);
     }
-    organModelLabel.setBounds (organ.getX() + 486, organ.getY() + 28, 110, 14);
-    organModelBox.setBounds (organ.getX() + 486, organ.getY() + 44, 110, 24);
-    percToggle.setBounds (organ.getX() + 486, organ.getY() + 76, 120, 22);
-    perc3rdToggle.setBounds (organ.getX() + 486, organ.getY() + 100, 120, 22);
-    percFastToggle.setBounds (organ.getX() + 486, organ.getY() + 124, 120, 22);
-    percSoftToggle.setBounds (organ.getX() + 486, organ.getY() + 148, 120, 22);
-    vibToggle.setBounds (organ.getX() + 486, organ.getY() + 172, 120, 22);
+    organModelLabel.setBounds (organ.getX() + 470, organ.getY() + 30, 110, 14);
+    organModelBox.setBounds (organ.getX() + 470, organ.getY() + 48, 110, 24);
+    percToggle.setBounds (organ.getX() + 470, organ.getY() + 80, 124, 22);
+    perc3rdToggle.setBounds (organ.getX() + 470, organ.getY() + 104, 124, 22);
+    percFastToggle.setBounds (organ.getX() + 470, organ.getY() + 128, 124, 22);
+    percSoftToggle.setBounds (organ.getX() + 470, organ.getY() + 152, 124, 22);
+    vibToggle.setBounds (organ.getX() + 470, organ.getY() + 176, 124, 22);
 
     const auto synth = synthPanelBounds();
     for (int i = 0; i < 6; ++i)
     {
-        const int x = synth.getX() + 28 + i * 98;
-        synthKnobs[i].setBounds (x, synth.getY() + 44, 64, 64);
-        synthKnobLabels[i].setBounds (x, synth.getY() + 110, 64, 14);
+        const int x = synth.getX() + 24 + i * 96;
+        synthKnobs[i].setBounds (x, synth.getY() + 46, 64, 64);
+        synthKnobLabels[i].setBounds (x, synth.getY() + 112, 64, 14);
     }
-    filterTypeLabel.setBounds (synth.getX() + 28, synth.getY() + 140, 150, 14);
-    filterTypeBox.setBounds (synth.getX() + 28, synth.getY() + 156, 150, 24);
-    synthSourceLabel.setBounds (synth.getX() + 200, synth.getY() + 156, 380, 24);
+    filterTypeLabel.setBounds (synth.getX() + 24, synth.getY() + 140, 150, 14);
+    filterTypeBox.setBounds (synth.getX() + 24, synth.getY() + 156, 150, 24);
+    synthSourceLabel.setBounds (synth.getX() + 198, synth.getY() + 156, 380, 24);
 }

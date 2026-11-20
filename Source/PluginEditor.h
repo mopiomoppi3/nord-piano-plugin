@@ -3,13 +3,36 @@
 #include <JuceHeader.h>
 #include "PluginProcessor.h"
 
-// Nord Piano 5 style editor, v0.4 layout (1280x560):
-//  top panel: load + file status, VOLUME / REVERB / TUNE / STRETCH, A-Hz presets
+// Hardware-style look and feel (v0.5): drawn knobs with value arcs, drawbar
+// handles (brown for the two sub footages, cream for the rest), LED toggle
+// buttons and dark combo boxes, so the editor reads like the red hardware
+// panel instead of stock JUCE widgets.
+class NordLookAndFeel : public juce::LookAndFeel_V4
+{
+public:
+    void drawRotarySlider (juce::Graphics&, int x, int y, int width, int height,
+                           float sliderPosProportional, float rotaryStartAngle,
+                           float rotaryEndAngle, juce::Slider&) override;
+    void drawLinearSlider (juce::Graphics&, int x, int y, int width, int height,
+                           float sliderPos, float minSliderPos, float maxSliderPos,
+                           juce::Slider::SliderStyle, juce::Slider&) override;
+    void drawToggleButton (juce::Graphics&, juce::ToggleButton&,
+                           bool shouldDrawButtonAsHighlighted, bool shouldDrawButtonAsDown) override;
+    void drawComboBox (juce::Graphics&, int width, int height, bool isButtonDown,
+                       int buttonX, int buttonY, int buttonW, int buttonH, juce::ComboBox&) override;
+    juce::Font getComboBoxFont (juce::ComboBox&) override;
+    void drawButtonBackground (juce::Graphics&, juce::Button&, const juce::Colour& backgroundColour,
+                               bool shouldDrawButtonAsHighlighted, bool shouldDrawButtonAsDown) override;
+};
+
+// Nord Piano 5 style editor, v0.5 layout (1280x560):
+//  wood side cheeks, red panel with darker inset sections
+//  top panel: LCD file display + load, VOLUME / REVERB / TUNE / STRETCH, A-Hz presets
 //  ORGAN section: 9 drawbars, model selector, percussion + vib/chorus switches
 //  SYNTH section: wave / filter / amp-envelope knobs, filter type selector
-//  bottom: full keyboard
+//  bottom: full-width 88-key keyboard with a felt strip
 // Section controls write the live engine states in the processor, so every
-// control on screen is wired to the sound. A section is greyed out until a
+// control on screen is wired to the sound. A section is dimmed until a
 // preset of that kind is loaded.
 class NordPianoAudioProcessorEditor : public juce::AudioProcessorEditor,
                                       private juce::Timer
@@ -31,6 +54,7 @@ private:
     void setSynthControlsEnabled (bool);
 
     NordPianoAudioProcessor& processor;
+    NordLookAndFeel lookAndFeel;
 
     juce::TextButton loadButton { "Load File..." };
     juce::Label fileLabel;

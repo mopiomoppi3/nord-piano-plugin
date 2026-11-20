@@ -35,7 +35,7 @@ juce::uint32 readBitsMSB (const juce::uint8* data, size_t size, int begBit, int 
 
 struct NpnoLayer
 {
-    juce::AudioBuffer<float> audio; // decoded PCM, normalised to peak 1.0
+    juce::AudioBuffer<float> audio; // decoded PCM, normalised per stroke to peak 1.0
     int velocityFloor = 0;          // attenuation floor, 0.2 dB steps (v5: 1 dB x5)
     int loopStart = -1;             // frames, -1 = no loop
     int loopLength = 0;
@@ -47,7 +47,8 @@ struct NpnoZone
     int rootNote = 60;
     int lowNote = 0;
     int highNote = 127;
-    std::vector<NpnoLayer> layers;  // loudest first, release strokes excluded
+    std::vector<NpnoLayer> layers;        // normal strokes, loudest first
+    std::vector<NpnoLayer> releaseLayers; // key-release strokes (flags 2), loudest first
 };
 
 struct NpnoFile
